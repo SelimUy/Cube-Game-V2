@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cube Game V2</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; background: black; }
+        .button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            background-color: #555;
+            border: 2px solid gray;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        .dark-mode-button {
+            top: 50px;
+        }
+        .refresh-button {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, 0);
+            width: 50px;
+            height: 50px;
+            background-color: red;
+            border-radius: 15px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+        .refresh-button img {
+            width: 30px;
+            height: 30px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <button class="button" id="pauseButton">Pause</button>
+    <button class="button dark-mode-button" id="darkModeButton">Toggle Dark Mode</button>
+    <div class="refresh-button" id="refreshButton">
+        <img src="https://cdn0.iconfinder.com/data/icons/glyphpack/41/refresh-512.png" alt="Refresh">
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const refreshButton = document.getElementById('refreshButton');
+        const pauseButton = document.getElementById('pauseButton');
+        const darkModeButton = document.getElementById('darkModeButton');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 50,
+            width: 20,
+            height: 20,
+            speed: 5,
+            fastSpeed: 15
+        };
+
+        let spikes = [];
+        let spikeInterval = 2000;
+        let gameOver = false;
+        let score = 0;
+        let highScore = localStorage.getItem('highScore') || 0;
+        let colorIndex = 0;
+        const colors = ['red', 'green', 'blue', 'orange', 'indigo', 'violet'];
+        let currentColor = colors[colorIndex];
+        let colorMode = false;
+        let spikeSpeed = 2; // Initial speed of the spikes
+        let showSpeedMessage = false;
+        let messageShown = false;
+        let darkMode = true; // Dark mode enabled by default
+        let paused = false; // Game paused state
+
+        const keysPressed = new Set(); // Set to track pressed keys
+
+        function createSpike() {
+            const spike = {
+                x: Math.random() * (canvas.width - 30) + 5,  // Adjust to keep spikes within borders
+                y: 0,
+                width: 20,
+                height: 20,
+                speed: spikeSpeed // Use the current spikeSpeed
+            };
+            spikes.push(spike);
+        }
+
+        function updateSpikes() {
+            for (let i = 0; i < spikes.length; i++) {
+                spikes[i].y += spikes[i].speed;
+                if (spikes[i].y > canvas.height) {
+                    spikes.splice(i, 1);
+                    score++;
+                    highScore = Math.max(score, highScore);
+                    localStorage.setItem('highScore', highScore);
+                }
+            }
+        }
+
+        function drawSpikes() {
+            spikes.forEach(spike => {
+                ctx.fillStyle = currentColor;
+                ctx.fillRect(spike.x, spike.y, spike.width, spike.height);
+            });
+        }
+
+        function detectCollision() {
+            spikes.forEach(spike => {
+                if (player.x < spike.x + spike.width &&
+                    player.x + player.width > spike.x &&
+                    player.y < spike.y + spike.height &&
+                    player.height + player.y > spike.y) {
+                    gameOver = true;
+                }
+            });
+        }
+
+        function drawScore() {
+            ctx.fillStyle = darkMode ? 'white' : 'black';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('Score: ' + score, 10, 10);
+            ctx.fillText('High Score: ' + highScore, 10, 40);
+            if (showSpeedMessage) {
+                ctx.fillText('Speed increasing...', 10, 70);
+            }
+        }
+
+        function update() {
+            if (!gameOver && !paused) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = 'blue';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+
+                updateSpikes();
+                drawSpikes();
+                detectCollision();
+                drawScore();
+
+                handleMovement(); // Handle continuous movement
+
+                requestAnimationFrame(update);
+            } else if (gameOver) {
+                ctx.fillStyle = darkMode ? 'white' : 'black';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
+                ctx.fillText('Final Score: ' + score, canvas.width / 2, canvas.height / 2 + 20);
+                refreshButton.style.display = 'flex';
+                refreshButton.style.top = `${canvas.height / 2 + 60}px`;
+            }
+        }
+
+        function handleMovement() {
+            let currentSpeed = keysPressed.has('Shift') ? player.fastSpeed : player.speed;
+            if (keysPressed.has('ArrowUp')) {
+                player.y = Math.max(player.y - currentSpeed, 5);  // Prevent moving out of upper border
+            }
+            if (keysPressed.has('ArrowDown')) {
+                player.y = Math.min(player.y + currentSpeed, canvas.height - player.height - 5);  // Prevent moving out of lower border
+            }
+            if (keysPressed.has('ArrowLeft')) {
+                player.x = Math.max(player.x - currentSpeed, 5);  // Prevent moving out of left border
+            }
+            if (keysPressed.has('ArrowRight')) {
+                player.x = Math.min(player.x + currentSpeed, canvas.width - player.width - 5);  // Prevent moving out of right border
+            }
+        }
+
+        function resetGame() {
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 50;
+            spikes = [];
+            spikeInterval = 2000;
+            gameOver = false;
+            score = 0;
+            spikeSpeed = 2; // Reset spike speed
+            showSpeedMessage = false;
+            messageShown = false;
+            refreshButton.style.display = 'none';
+            gameLoop();
+            update();
+        }
+
+        function toggleColorMode() {
+            colorIndex = (colorIndex + 1) % colors.length;
+            currentColor = colors[colorIndex];
+        }
+
+        function toggleDarkMode() {
+            darkMode = !darkMode;
+            canvas.style.background = darkMode ? 'black' : '#eee';
+            document.querySelector('.button').style.backgroundColor = darkMode ? '#555' : 'lightgray';
+            document.querySelector('.dark-mode-button').style.backgroundColor = darkMode ? '#555' : 'lightgray';
+            document.querySelector('.button').style.color = darkMode ? 'white' : 'black';
+            document.querySelector('.dark-mode-button').style.color = darkMode ? 'white' : 'black';
+        }
+
+        function togglePause() {
+            paused = !paused;
+            pauseButton.textContent = paused ? 'Play' : 'Pause';
+            if (!paused) {
+                update(); // Resume the game loop if unpaused
+            }
+        }
+
+        function gameLoop() {
+            if (!gameOver) {
+                createSpike();
+                setTimeout(gameLoop, spikeInterval);
+                if (score < 100) {
+                    spikeInterval *= 0.98;  // Increase difficulty by reducing interval
+                } else {
+                    spikeSpeed += 0.1 / 2.5; // Increase spike speed after reaching score 100 (2.5x slower)
+                    if (!messageShown) {
+                        showSpeedMessage = true;
+                        setTimeout(() => { showSpeedMessage = false; }, 2000); // Show message for 2 seconds
+                        messageShown = true;
+                    }
+                }
+            }
+        }
+
+        // Initialize dark mode on load
+        document.addEventListener('DOMContentLoaded', () => {
+            darkMode = false;  // Set to false initially to ensure toggle works correctly
+            toggleDarkMode();  // Force toggle to enable dark mode
+            update();
+            gameLoop();
+        });
+
+        refreshButton.addEventListener('click', resetGame);
+        pauseButton.addEventListener('click', togglePause);
+        darkModeButton.addEventListener('click', toggleDarkMode);
+        window.addEventListener('keydown', (event) => keysPressed.add(event.key));
+        window.addEventListener('keyup', (event) => keysPressed.delete(event.key));
+    </script>
+</body>
+</html>
